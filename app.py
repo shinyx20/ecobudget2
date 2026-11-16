@@ -8,7 +8,7 @@ from database import close_db, init_db
 from models import settings as settings_model
 from models import user as user_model
 from routes.advice import advice_bp
-from routes.auth import auth_bp
+from routes.auth import auth_bp, is_user_admin
 from routes.budgets import budgets_bp
 from routes.dashboard import dashboard_bp
 from routes.goals import goals_bp
@@ -79,6 +79,14 @@ def load_user_settings():
         g.currency = g.settings["currency"]
 
 
+# ---------- Pas de cache : évite d'afficher la page d'un autre rôle (bouton Retour) ----------
+@app.after_request
+def no_store(resp):
+    if request.endpoint != "static":
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @app.errorhandler(400)
 def bad_request(e):
     return "Requête invalide. Rechargez la page et réessayez.", 400
@@ -106,6 +114,7 @@ def inject_globals():
             unread = user_model.count_unread_notifications(user_id)
     return {
         "current_user": user,
+        "is_admin": is_user_admin(user),
         "unread_count": unread,
         "csrf_token": csrf_token,
         "user_settings": g.get("settings") if user else None,

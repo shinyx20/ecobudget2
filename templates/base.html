@@ -29,7 +29,7 @@
 
     <!-- ===== SIDEBAR ===== -->
     <aside class="sidebar" id="sidebar">
-        <a href="{{ '/admin/reviews' if session.get('is_admin') == 1 else '/dashboard' }}" class="brand">
+        <a href="{{ '/admin/reviews' if is_admin else '/dashboard' }}" class="brand">
             <span class="brand-logo" aria-hidden="true">
                 <svg viewBox="0 0 32 32" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <polygon points="3,5 15,12 11,16" fill="#FFFFFF"/>
@@ -44,7 +44,7 @@
             <span class="brand-name">EcoBudget</span>
         </a>
 
-        {% if session.get('is_admin') == 1 %}
+        {% if is_admin %}
             {% set nav = [
                 ("Espace Admin", "/admin/reviews", "shield-check")
             ] %}
@@ -89,7 +89,7 @@
                     <i data-lucide="moon" class="icon-moon"></i>
                     <i data-lucide="sun" class="icon-sun"></i>
                 </button>
-                {% if session.get('is_admin') != 1 %}
+                {% if not is_admin %}
                 <a class="icon-btn" href="/notifications" aria-label="Notifications ({{ unread_count }} non lues)">
                     <i data-lucide="bell"></i>
                     {% if unread_count > 0 %}<span class="badge-dot">{{ unread_count }}</span>{% endif %}
@@ -113,7 +113,7 @@
     </div>
 </div>
 
-{% if current_user and session.get('is_admin') != 1 %}
+{% if current_user and not is_admin %}
 <!-- ===== CHATBOT ECOBOT ===== -->
 <div class="chatbot" id="chatbot">
     <section class="chatbot-panel" id="chatbot-panel" hidden aria-label="EcoBot">

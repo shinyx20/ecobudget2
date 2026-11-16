@@ -3,7 +3,7 @@ from database import IntegrityError, get_db
 
 def get_by_id(user_id):
     return get_db().execute(
-        "SELECT id, full_name, email, photo, created_at FROM users WHERE id = ?",
+        "SELECT id, full_name, email, photo, is_admin, created_at FROM users WHERE id = ?",
         (user_id,),
     ).fetchone()
 

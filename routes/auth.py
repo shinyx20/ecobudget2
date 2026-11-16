@@ -1,8 +1,8 @@
 import re
 from functools import wraps
 
-from flask import (Blueprint, flash, redirect, render_template, request,
-                   session, url_for)
+from flask import (Blueprint, flash, jsonify, redirect, render_template,
+                   request, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from models import user as user_model
@@ -13,24 +13,30 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def is_user_admin(u):
+    """Source unique de vérité : la colonne is_admin de la base (jamais le cookie)."""
     if not u:
         return False
     try:
-        flag = bool(u["is_admin"])
+        return bool(u["is_admin"])
     except (KeyError, IndexError):
-        flag = False
-    return flag or u["email"].lower() == "admin@ecobudget.com"
+        return False
 
 
 def login_required(view):
-    """Protège une page privée : redirige vers le login si non connecté."""
+    """Protège une page UTILISATEUR : non connecté -> login ; administrateur -> espace admin."""
     @wraps(view)
     def wrapped(*args, **kwargs):
         uid = session.get("user_id")
-        if not uid or not user_model.get_by_id(uid):
+        u = user_model.get_by_id(uid) if uid else None
+        if not u:
             session.clear()
             flash("Veuillez vous connecter pour accéder à cette page.", "info")
             return redirect(url_for("auth.login"))
+        if is_user_admin(u):
+            if request.path.startswith("/chatbot"):
+                return jsonify(ok=False, error="Réservé aux utilisateurs."), 403
+            flash("Cette page est réservée aux utilisateurs. Vous êtes connecté en administrateur.", "info")
+            return redirect(url_for("reviews.admin_index"))
         return view(*args, **kwargs)
     return wrapped
 
@@ -78,7 +84,6 @@ def login():
             if user and check_password_hash(user["password_hash"], password):
                 session.clear()
                 session["user_id"] = user["id"]
-                session["is_admin"] = 1 if is_user_admin(user) else 0
                 session.permanent = remember
                 if is_user_admin(user):
                     flash("Bienvenue dans l'espace administrateur.", "success")
@@ -93,7 +98,10 @@ def login():
 @auth_bp.route("/signup", methods=["GET", "POST"])
 def signup():
     if "user_id" in session:
-        return redirect(url_for("dashboard.index"))
+        u = user_model.get_by_id(session["user_id"])
+        if u:
+            return redirect(url_for("reviews.admin_index") if is_user_admin(u) else url_for("dashboard.index"))
+        session.clear()
 
     errors, form = {}, {}
     if request.method == "POST":
@@ -136,7 +144,6 @@ def signup():
             else:
                 session.clear()
                 session["user_id"] = user_id
-                session["is_admin"] = 0
                 flash("Compte créé avec succès. Bienvenue sur EcoBudget !", "success")
                 return redirect(url_for("dashboard.index"))
 
