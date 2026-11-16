@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+{% block title %}{% if view_mode == 'admin' %}Espace Admin · EcoBudget{% else %}Avis & Réclamations · EcoBudget{% endif %}{% endblock %}
+{% block page_title %}{% if view_mode == 'admin' %}Espace Admin — Avis & Réclamations{% else %}Avis & Réclamations{% endif %}{% endblock %}
+
+{% block head %}
+<style>
+.review-types {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+.type-pill { position: relative; cursor: pointer; }
+.type-pill input { position: absolute; opacity: 0; pointer-events: none; }
+.type-pill span {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 8px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    font-weight: 600; font-size: .88rem; color: var(--muted); transition: all .2s ease;
+}
+.type-pill input:checked + span {
+    border-color: var(--emerald); background: var(--mint-bg); color: var(--title);
+}
+
+.star-rating {
+    display: inline-flex;
+    flex-direction: row-reverse;
+    gap: 6px;
+    font-size: 2rem;
+    line-height: 1;
+}
+.star-rating input { display: none; }
+.star-rating label {
+    color: var(--border);
+    cursor: pointer;
+    transition: color .15s ease, transform .15s ease;
+}
+.star-rating input:checked ~ label,
+.star-rating label:hover,
+.star-rating label:hover ~ label {
+    color: #F59E0B;
+}
+.star-rating label:hover { transform: scale(1.1); }
+
+.stars-display {
+    display: inline-flex;
+    gap: 2px;
+    font-size: 1.15rem;
+    color: var(--border);
+}
+.stars-display .filled { color: #F59E0B; }
+
+.review-list { display: grid; gap: 14px; margin-top: 12px; }
+.review-item {
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--emerald);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+.review-item.type-reclamation { border-left-color: var(--coral); }
+.review-item.type-recommandation { border-left-color: #3B82F6; }
+
+.review-top {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.review-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.review-body { margin: 8px 0 10px; color: var(--text); white-space: pre-line; }
+.review-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+.review-badge {
+    padding: 3px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700;
+    background: var(--mint-bg); color: var(--emerald-dark);
+}
+[data-theme="dark"] .review-badge { color: var(--emerald); }
+.review-badge.reclamation { background: rgba(231, 111, 81, .16); color: var(--coral); }
+.review-badge.recommandation { background: rgba(59, 130, 246, .16); color: #2563EB; }
+[data-theme="dark"] .review-badge.recommandation { color: #60A5FA; }
+
+.status-pill {
+    padding: 3px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600;
+    background: var(--surface-2); color: var(--muted);
+}
+.status-pill.status-resolu { background: var(--mint-bg); color: var(--emerald-dark); }
+.status-pill.status-lu { background: rgba(59, 130, 246, .14); color: #2563EB; }
+
+.admin-reply-box {
+    margin-top: 12px; padding: 12px 14px; border-radius: var(--radius-sm);
+    background: var(--surface-2); border-left: 3px solid var(--emerald);
+}
+.admin-reply-box strong { display: flex; align-items: center; gap: 6px; font-size: .88rem; color: var(--title); margin-bottom: 4px; }
+.admin-reply-box p { margin: 0; font-size: .92rem; }
+
+.admin-reply-form {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.admin-reply-form input[type="text"] { flex: 1; min-width: 220px; }
+
+.admin-pwd-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    align-items: end;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        {% if view_mode == 'admin' %}
+        <h2>Gestion des avis et réclamations</h2>
+        <p class="muted">Consultez les évaluations 5 étoiles, recommandations et réclamations des utilisateurs.</p>
+        {% else %}
+        <h2>Votre avis compte</h2>
+        <p class="muted">Évaluez votre expérience sur 5 étoiles, proposez une recommandation ou signalez une réclamation.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% if view_mode == 'user' %}
+<!-- ==================== ESPACE UTILISATEUR ==================== -->
+<div class="profile-grid">
+    <section class="card">
+        <h3 class="card-title"><i data-lucide="message-square-plus"></i> Évaluer l'expérience ou écrire un retour</h3>
+        <p class="muted">Partagez votre note sur 5 étoiles, une idée d'amélioration ou une réclamation.</p>
+
+        <form method="post" action="{{ url_for('reviews.index') }}" novalidate>
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+            <div class="field">
+                <label>Type de retour</label>
+                <div class="review-types" role="radiogroup" aria-label="Type de retour">
+                    <label class="type-pill">
+                        <input type="radio" name="type" value="avis" {% if form.get('type', 'avis') == 'avis' %}checked{% endif %}>
+                        <span><i data-lucide="star"></i> Avis</span>
+                    </label>
+                    <label class="type-pill">
+                        <input type="radio" name="type" value="recommandation" {% if form.get('type') == 'recommandation' %}checked{% endif %}>
+                        <span><i data-lucide="lightbulb"></i> Recommandation</span>
+                    </label>
+                    <label class="type-pill">
+                        <input type="radio" name="type" value="reclamation" {% if form.get('type') == 'reclamation' %}checked{% endif %}>
+                        <span><i data-lucide="alert-circle"></i> Réclamation</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="field">
+                <label>Note de votre expérience (sur 5 étoiles)</label>
+                <div class="star-rating" aria-label="Note sur 5 étoiles">
+                    {% set selected_rating = form.get('rating', 5)|int %}
+                    {% for n in [5, 4, 3, 2, 1] %}
+                    <input type="radio" id="star-{{ n }}" name="rating" value="{{ n }}" {% if selected_rating == n %}checked{% endif %}>
+                    <label for="star-{{ n }}" title="{{ n }} étoile{{ 's' if n > 1 else '' }}">★</label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="field {% if errors.get('subject') %}has-error{% endif %}">
+                <label for="rev-subject">Sujet <span class="muted">(facultatif)</span></label>
+                <input class="control" type="text" id="rev-subject" name="subject" maxlength="120"
+                       placeholder="Ex : Interface intuitive / Suggestion de fonctionnalité"
+                       value="{{ form.get('subject', '') }}">
+                <p class="field-error">{{ errors.get('subject', '') }}</p>
+            </div>
+
+            <div class="field {% if errors.get('comment') %}has-error{% endif %}">
+                <label for="rev-comment">Votre commentaire ou recommandation</label>
+                <textarea class="control" id="rev-comment" name="comment" rows="4" maxlength="1000" required
+                          placeholder="Décrivez votre expérience sur EcoBudget, votre recommandation ou votre réclamation...">{{ form.get('comment', '') }}</textarea>
+                <p class="field-error">{{ errors.get('comment', '') }}</p>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">
+                <i data-lucide="send"></i> Envoyer mon avis
+            </button>
+        </form>
+    </section>
+
+    <section class="card">
+        <h3 class="card-title"><i data-lucide="history"></i> Mes avis et réclamations envoyés</h3>
+        <p class="muted">Suivez l'état de traitement et les réponses de l'administrateur.</p>
+
+        {% if reviews %}
+        <div class="review-list">
+            {% for r in reviews %}
+            <article class="review-item type-{{ r.type }}">
+                <div class="review-top">
+                    <div class="review-meta">
+                        <span class="review-badge {{ r.type }}">
+                            {% if r.type == 'reclamation' %}Réclamation{% elif r.type == 'recommandation' %}Recommandation{% else %}Avis{% endif %}
+                        </span>
+                        <strong>{{ r.subject or 'Sans sujet' }}</strong>
+                    </div>
+                    <div class="stars-display" aria-label="{{ r.rating }} sur 5 étoiles">
+                        {% for i in range(1, 6) %}
+                        <span class="{{ 'filled' if i <= r.rating else '' }}">★</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <p class="review-body">{{ r.comment }}</p>
+
+                <div class="review-foot">
+                    <span class="muted small">Envoyé le {{ r.created_at[:10]|fr_date }}</span>
+                    <span class="status-pill status-{{ r.status }}">
+                        {% if r.status == 'resolu' %}Résolu{% elif r.status == 'lu' %}Lu par l'admin{% else %}En attente{% endif %}
+                    </span>
+                </div>
+
+                {% if r.admin_reply %}
+                <div class="admin-reply-box">
+                    <strong><i data-lucide="shield-check"></i> Réponse de l'administrateur :</strong>
+                    <p>{{ r.admin_reply }}</p>
+                </div>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="mini-empty" style="padding: 32px 16px; text-align: center;">
+            <i data-lucide="message-square"></i>
+            <p class="muted">Vous n'avez encore envoyé aucun avis ou réclamation.</p>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+{% else %}
+<!-- ==================== ESPACE ADMIN ==================== -->
+<section class="summary-grid">
+    <article class="card mini">
+        <p class="muted">Total des retours</p>
+        <p class="mini-value">{{ stats.total or 0 }}</p>
+    </article>
+    <article class="card mini">
+        <p class="muted">Note moyenne</p>
+        <p class="mini-value income">{{ stats.avg_rating or 0 }} / 5 ★</p>
+    </article>
+    <article class="card mini">
+        <p class="muted">Réclamations</p>
+        <p class="mini-value expense">{{ stats.reclamations or 0 }}</p>
+    </article>
+    <article class="card mini">
+        <p class="muted">En attente</p>
+        <p class="mini-value">{{ stats.pending or 0 }}</p>
+    </article>
+</section>
+
+<!-- Sécurité Admin : Changer le mot de passe -->
+<section class="card" style="margin-bottom: 20px;">
+    <h3 class="card-title"><i data-lucide="lock"></i> Changer le mot de passe Administrateur</h3>
+    <p class="muted small">Modifiez le mot de passe du compte administrateur (<code>{{ current_user.email }}</code>).</p>
+    <form method="post" action="{{ url_for('reviews.admin_password') }}" class="admin-pwd-grid">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="field" style="margin-bottom: 0;">
+            <label for="adm-curr-pwd">Mot de passe actuel</label>
+            <input class="control" type="password" id="adm-curr-pwd" name="current_password" required placeholder="Mot de passe actuel">
+        </div>
+        <div class="field" style="margin-bottom: 0;">
+            <label for="adm-new-pwd">Nouveau mot de passe</label>
+            <input class="control" type="password" id="adm-new-pwd" name="new_password" required minlength="8" placeholder="Min. 8 car., 1 lettre + 1 chiffre">
+        </div>
+        <div class="field" style="margin-bottom: 0;">
+            <label for="adm-conf-pwd">Confirmer le nouveau</label>
+            <input class="control" type="password" id="adm-conf-pwd" name="confirm_password" required minlength="8" placeholder="Confirmer">
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                <i data-lucide="key-round"></i> Mettre à jour
+            </button>
+        </div>
+    </form>
+</section>
+
+<!-- Filtres Admin -->
+<form class="card filters" method="get" action="{{ url_for('reviews.admin_index') }}" style="margin-bottom: 20px;">
+    <div>
+        <label for="af-type">Type</label>
+        <select class="control" id="af-type" name="type">
+            <option value="">Tous les types</option>
+            <option value="avis" {% if filters.type == 'avis' %}selected{% endif %}>Avis</option>
+            <option value="recommandation" {% if filters.type == 'recommandation' %}selected{% endif %}>Recommandations</option>
+            <option value="reclamation" {% if filters.type == 'reclamation' %}selected{% endif %}>Réclamations</option>
+        </select>
+    </div>
+    <div>
+        <label for="af-status">Statut</label>
+        <select class="control" id="af-status" name="status">
+            <option value="">Tous les statuts</option>
+            <option value="en_attente" {% if filters.status == 'en_attente' %}selected{% endif %}>En attente</option>
+            <option value="lu" {% if filters.status == 'lu' %}selected{% endif %}>Lu</option>
+            <option value="resolu" {% if filters.status == 'resolu' %}selected{% endif %}>Résolu</option>
+        </select>
+    </div>
+    <div class="filter-actions">
+        <button type="submit" class="btn btn-primary"><i data-lucide="filter"></i> Filtrer</button>
+        {% if filters.type or filters.status %}
+        <a href="{{ url_for('reviews.admin_index') }}" class="btn btn-ghost">Réinitialiser</a>
+        {% endif %}
+    </div>
+</form>
+
+{% if reviews %}
+<div class="review-list">
+    {% for r in reviews %}
+    <article class="card review-item type-{{ r.type }}">
+        <div class="review-top">
+            <div class="review-meta">
+                <span class="review-badge {{ r.type }}">
+                    {% if r.type == 'reclamation' %}Réclamation{% elif r.type == 'recommandation' %}Recommandation{% else %}Avis{% endif %}
+                </span>
+                <strong>{{ r.subject or 'Sans sujet' }}</strong>
+                <span class="muted small">· par <strong>{{ r.user_name or 'Utilisateur #' ~ r.user_id }}</strong> ({{ r.user_email or '' }})</span>
+            </div>
+            <div class="review-meta">
+                <div class="stars-display" aria-label="{{ r.rating }} sur 5 étoiles">
+                    {% for i in range(1, 6) %}
+                    <span class="{{ 'filled' if i <= r.rating else '' }}">★</span>
+                    {% endfor %}
+                </div>
+                <span class="status-pill status-{{ r.status }}">
+                    {% if r.status == 'resolu' %}Résolu{% elif r.status == 'lu' %}Lu{% else %}En attente{% endif %}
+                </span>
+            </div>
+        </div>
+
+        <p class="review-body">{{ r.comment }}</p>
+        <p class="muted small">Reçu le {{ r.created_at[:10]|fr_date }}</p>
+
+        <form method="post" action="{{ url_for('reviews.admin_reply', review_id=r.id) }}" class="admin-reply-form">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <select name="status" class="control" style="max-width: 170px;">
+                <option value="en_attente" {% if r.status == 'en_attente' %}selected{% endif %}>En attente</option>
+                <option value="lu" {% if r.status == 'lu' %}selected{% endif %}>Marquer comme lu</option>
+                <option value="resolu" {% if r.status == 'resolu' %}selected{% endif %}>Marquer résolu</option>
+            </select>
+            <input type="text" name="admin_reply" class="control" maxlength="1000"
+                   value="{{ r.admin_reply or '' }}" placeholder="Écrire une réponse à l'utilisateur...">
+            <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> Enregistrer</button>
+        </form>
+
+        <form method="post" action="{{ url_for('reviews.admin_delete', review_id=r.id) }}" style="margin-top: 8px; text-align: right;">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-ghost" style="padding: 6px 12px; font-size: .83rem; color: var(--coral);">
+                <i data-lucide="trash-2"></i> Supprimer
+            </button>
+        </form>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<section class="card empty-state">
+    <span class="empty-icon"><i data-lucide="inbox"></i></span>
+    <h3>Aucun avis ou réclamation</h3>
+    <p class="muted">Aucun retour utilisateur ne correspond à votre sélection pour le moment.</p>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

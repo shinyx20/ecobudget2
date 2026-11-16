@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}EcoBudget{% endblock %}</title>
+
+    <!-- Applique le thème avant l'affichage (évite le flash blanc) -->
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem("eco-theme");
+                if (t) document.documentElement.setAttribute("data-theme", t);
+            } catch (e) {}
+        })();
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chatbot.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body data-flash='{{ get_flashed_messages(with_categories=true)|tojson }}'>
+{% block shell %}
+<div class="app-shell">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar" id="sidebar">
+        <a href="{{ '/admin/reviews' if session.get('is_admin') == 1 else '/dashboard' }}" class="brand">
+            <span class="brand-logo" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <polygon points="3,5 15,12 11,16" fill="#FFFFFF"/>
+                    <polygon points="2,11 11,16 8,19" fill="#D9F3E9"/>
+                    <polygon points="11,16 18,12 16,22" fill="#FFFFFF"/>
+                    <polygon points="18,12 23,10 21,15" fill="#D9F3E9"/>
+                    <polygon points="23,11 30,12 22,13.5" fill="#FACC15"/>
+                    <polygon points="16,22 11,16 10,28" fill="#A7F3D0"/>
+                    <circle cx="26.5" cy="15.5" r="2.2" fill="#FACC15"/>
+                </svg>
+            </span>
+            <span class="brand-name">EcoBudget</span>
+        </a>
+
+        {% if session.get('is_admin') == 1 %}
+            {% set nav = [
+                ("Espace Admin", "/admin/reviews", "shield-check")
+            ] %}
+        {% else %}
+            {% set nav = [
+                ("Dashboard", "/dashboard", "layout-dashboard"),
+                ("Transactions", "/transactions", "arrow-left-right"),
+                ("Budgets", "/budgets", "wallet"),
+                ("Objectifs d'épargne", "/goals", "piggy-bank"),
+                ("Statistiques", "/statistics", "chart-pie"),
+                ("Conseils intelligents", "/advice", "lightbulb"),
+                ("Avis & Réclamations", "/reviews", "star"),
+                ("Profil", "/profile", "user"),
+                ("Paramètres", "/settings", "settings")
+            ] %}
+        {% endif %}
+        <nav class="nav" aria-label="Navigation principale">
+            {% for label, href, icon in nav %}
+            <a href="{{ href }}" class="nav-link {% if request.path.startswith(href) %}active{% endif %}"
+               {% if request.path.startswith(href) %}aria-current="page"{% endif %}>
+                <i data-lucide="{{ icon }}"></i><span>{{ label }}</span>
+            </a>
+            {% endfor %}
+        </nav>
+
+        <a href="/logout" class="nav-link nav-logout" id="logout-link">
+            <i data-lucide="log-out"></i><span>Déconnexion</span>
+        </a>
+    </aside>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    <!-- ===== ZONE PRINCIPALE ===== -->
+    <div class="main">
+        <header class="topbar">
+            <button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Ouvrir le menu">
+                <i data-lucide="menu"></i>
+            </button>
+            <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+
+            <div class="topbar-actions">
+                <button class="icon-btn" type="button" data-theme-toggle aria-label="Changer le thème (clair / sombre)">
+                    <i data-lucide="moon" class="icon-moon"></i>
+                    <i data-lucide="sun" class="icon-sun"></i>
+                </button>
+                {% if session.get('is_admin') != 1 %}
+                <a class="icon-btn" href="/notifications" aria-label="Notifications ({{ unread_count }} non lues)">
+                    <i data-lucide="bell"></i>
+                    {% if unread_count > 0 %}<span class="badge-dot">{{ unread_count }}</span>{% endif %}
+                </a>
+                <a class="avatar" href="/profile" aria-label="Mon profil">
+                    {% if current_user and current_user.photo %}
+                    <img src="{{ url_for('static', filename='uploads/' ~ current_user.photo) }}" alt="">
+                    {% elif current_user %}
+                    {{ current_user.full_name[:1]|upper }}
+                    {% else %}
+                    ?
+                    {% endif %}
+                </a>
+                {% endif %}
+            </div>
+        </header>
+
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+{% if current_user and session.get('is_admin') != 1 %}
+<!-- ===== CHATBOT ECOBOT ===== -->
+<div class="chatbot" id="chatbot">
+    <section class="chatbot-panel" id="chatbot-panel" hidden aria-label="EcoBot">
+        <header class="chatbot-head">
+            <span class="bot-avatar"><img src="{{ url_for('static', filename='img/ecobot.svg') }}" alt=""></span>
+            <div>
+                <strong>EcoBot</strong>
+                <span class="chatbot-sub">Assistant EcoBudget</span>
+            </div>
+            <button type="button" class="chatbot-close" id="chatbot-close" aria-label="Fermer">
+                <i data-lucide="x"></i>
+            </button>
+        </header>
+
+        <div class="chatbot-log" id="chatbot-log" aria-live="polite"></div>
+
+        <div class="chatbot-chips">
+            <button type="button" class="chip" data-topic="add">Ajouter une transaction ?</button>
+            <button type="button" class="chip" data-topic="budget">Créer un budget ?</button>
+            <button type="button" class="chip" data-topic="stats">Statistiques ?</button>
+            <button type="button" class="chip" data-topic="save">Économiser ?</button>
+            <button type="button" class="chip" data-topic="situation">Ma situation !</button>
+        </div>
+
+        <form class="chatbot-form" id="chatbot-form" autocomplete="off">
+            <input type="text" id="chatbot-input" maxlength="300"
+                   placeholder="Posez votre question…" aria-label="Votre message">
+            <button type="submit" class="chatbot-send" aria-label="Envoyer">
+                <i data-lucide="send"></i>
+            </button>
+        </form>
+    </section>
+
+    <button type="button" class="chatbot-toggle" id="chatbot-toggle" aria-label="Ouvrir EcoBot">
+        <img src="{{ url_for('static', filename='img/ecobot.svg') }}" alt="">
+    </button>
+</div>
+{% endif %}
+{% endblock %}
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
